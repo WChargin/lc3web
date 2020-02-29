@@ -1,6 +1,16 @@
 // Transpiled via Babel.
 // You can find the source at github:wchargin/lc3 in src/core/assemble.js.
 // I'll publish the new version when it's ready! :)
+
+// Feb 28, 2020
+// erikeidt:
+//     issue: 
+//         .FILL, like all directives, works only with constants and not labels
+//         so, you cannot not declare and initialize a global pointer variable that refers to a label
+//     solution:
+//         I modified the .FILL directive to be processed as an instruction:
+//            as an instruction it allows both constants as well as labels and fixes them up
+//
 var assemble = (function() {
     if (!Array.prototype.includes) {
       Array.prototype.includes = function(searchElement /*, fromIndex*/ ) {
@@ -896,7 +906,8 @@ var assemble = (function() {
             "ST": 3,
             "STI": 11,
             "STR": 7,
-            "TRAP": 15
+            "TRAP": 15,
+            ".FILL": 0
         };
         var opcode = instructions[upname];
 
@@ -926,6 +937,16 @@ var assemble = (function() {
             // This is one of the eight BR variants.
             ensureOpcount(1);
 
+            if ( upname == ".FILL" ) {
+                var extractOffset = function extractOffset(offset, bits) {
+                    var ctx = 'while parsing the offset for a ' + opname;
+                    var parsed = withContext(parseOffset, ctx)(0, offset, symbols, bits);
+                    return parsed;
+                };
+                var offset = extractOffset(operands[0], 17);
+                return [offset];
+            }
+            
             var _ref = upname === "BR" ? [true, true, true] : // plain "BR" is an unconditional branch
             ["N", "Z", "P"].map(function (x) {
                 return upname.substring(2).includes(x);
@@ -1039,8 +1060,8 @@ var assemble = (function() {
         // We use these to determine whether the first token in a line
         // is a label or an actual operation of some kind.
         var trapVectors = "GETC OUT PUTS IN PUTSP HALT".split(' ');
-        var instructions = ["ADD", "AND", "NOT", "BR", "BRP", "BRZ", "BRZP", "BRN", "BRNP", "BRNZ", "BRNZP", "JMP", "RET", "JSR", "JSRR", "LD", "LDI", "LDR", "LEA", "RTI", "ST", "STI", "STR", "TRAP"];
-        var directives = [".FILL", ".BLKW", ".STRINGZ"];
+        var instructions = ["ADD", "AND", "NOT", "BR", "BRP", "BRZ", "BRZP", "BRN", "BRNP", "BRNZ", "BRNZP", "JMP", "RET", "JSR", "JSRR", "LD", "LDI", "LDR", "LEA", "RTI", "ST", "STI", "STR", "TRAP", ".FILL"];
+        var directives = [ ".BLKW", ".STRINGZ"];
         var commands = [].concat(_toConsumableArray(trapVectors), instructions, directives);
 
         var program = lines.slice(begin);
@@ -1077,7 +1098,7 @@ var assemble = (function() {
             }
 
             var command = rest[0].toUpperCase();
-            var isDirective = command.charAt(0) === '.';
+            var isDirective = command.charAt(0) === '.' && command !== ".FILL";
             var pc = state.address + 1;
             if (isDirective) {
                 return delegate(handleDirective, labeledState, rest);
